@@ -1,0 +1,26 @@
+{
+  "name": "buffsw-cli",
+  "version": "0.1.0",
+  "description": "A terminal account selector for Freebuff, written in Go with Bubble Tea",
+  "license": "MIT",
+  "bin": {
+    "bs": "./bin/bs.exe"
+  },
+  "scripts": {
+    "postinstall": "node ./postinstall.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "platform",
+    "postinstall.mjs"
+  ],
+  "keywords": [
+    "cli",
+    "buffer",
+    "freebuff",
+    "account"
+  ]
+}

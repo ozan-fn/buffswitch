@@ -1,0 +1,2 @@
+#!/bin/sh
+echo "bs placeholder — akan diganti postinstall saat npm install"
