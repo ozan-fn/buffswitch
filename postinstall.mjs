@@ -46,7 +46,7 @@ if (!asset) {
   process.exit(1);
 }
 
-const version = packageJson.version;
+const version = packageJson.version.split("-")[0];
 const downloadUrl =
   process.env.BUFFSW_CLI_BINARY_URL ??
   `https://github.com/${REPO}/releases/download/v${version}/${asset}`;

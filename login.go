@@ -8,17 +8,31 @@ import (
 	"path/filepath"
 )
 
-const (
-	defaultCredsPath = "/home/ozan/.config/manicode/credentials.json"
-	defaultFreebuff  = "/home/ozan/.config/manicode/freebuff"
-)
+// defaultCredsPath/defaultFreebuff point at the user's own config dir
+// (~/.config/manicode/), so they work on Windows, macOS and Linux alike
+// instead of a hardcoded home.
+func defaultCredsPath() string {
+	return filepath.Join(mustHome(), ".config", "manicode", "credentials.json")
+}
+
+func defaultFreebuff() string {
+	return filepath.Join(mustHome(), ".config", "manicode", "freebuff")
+}
+
+func mustHome() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	return home
+}
 
 // freebuffBin returns the freebuff binary path (env override supported).
 func freebuffBin() string {
 	if b := os.Getenv("FREEBUFF_BIN"); b != "" {
 		return b
 	}
-	return defaultFreebuff
+	return defaultFreebuff()
 }
 
 // preLoginState is the account snapshot persisted between the TUI run and

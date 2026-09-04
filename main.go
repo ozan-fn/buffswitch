@@ -296,7 +296,7 @@ func (m *Model) viewList() string {
 // ---- entry point ----------------------------------------------------------
 
 func main() {
-	credsPath := flag.String("creds", defaultCredsPath, "path ke credentials.json")
+	credsPath := flag.String("creds", defaultCredsPath(), "path ke credentials.json")
 	flag.Parse()
 
 	for {
