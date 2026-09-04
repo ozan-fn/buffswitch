@@ -128,12 +128,14 @@ buffswitch/            repo; nama package npm-nya `buffsw-cli`
 ├── login.go          hand-off terminal: menjalankan `freebuff login`,
 │                     ingest hasil, kelola file state login sementara
 ├── store_test.go     unit test logika store
-├── package.json      wrapper npm: `bin.bs` → `bin/bs.exe`
-├── postinstall.mjs   salin binary platform yang cocok → `bin/bs.exe`
+├── package.json      wrapper npm: `bin.bs` → `bin/bs.exe` (tarball tidak
+│                     membawa binary — cuma stub + postinstall)
+├── postinstall.mjs   unduh binary yang cocok dengan OS/arch pengguna dari
+│                     GitHub Release → `bin/bs.exe`
 ├── bin/
-│   └── bs.exe        placeholder (`echo`); diganti postinstall
-└── platform/          binary hasil build, satu per OS/arch
-    └── buffsw-cli-<os>-<arch>/   binary
+│   └── bs.exe        placeholder teks biasa; diganti postinstall
+└── dist/              binary hasil build, satu per OS/arch (di-gitignore)
+                      — upload ke GitHub Release dengan `gh`
 ```
 
 ### Alur saat menekan `a`
@@ -263,39 +265,55 @@ ini** (golangci-lint v2, diinstal via
 
 ### Rilis binary (multi-OS)
 
-Semua binary platform dibundel dalam satu package ini (folder `platform/`).
-Saat install, `postinstall.mjs` memilih yang cocok dengan OS/arch pengguna
-lalu menyalinnya ke `bin/bs.exe` (nama target statis — Linux/macOS
-mengabaikan ekstensi `.exe`; yang penting bit eksekusi `0o755`), dan
-memastikan ia bisa dijalankan. Hanya `buffsw-cli` yang di-publish —
-tidak ada package platform terpisah.
+Package npm **tidak membawa binary sama sekali**. Binary tiap platform
+hidup sebagai **asset GitHub Release** (repo `ozan-fn/buffswitch`, tag
+`v<versi>`). Saat install, `postinstall.mjs` mengunduh **hanya satu yang
+cocok dengan OS/arch pengguna** dan menyimpannya sebagai `bin/bs.exe` —
+jadi pengguna mengunduh beberapa MB, tidak pernah kedelapan (~48 MB).
+`bin/bs.exe` di tarball berupa stub teks biasa (tanpa shebang) yang hanya
+mencetak error kalau postinstall tidak pernah berjalan — ia file, bukan
+skrip shell, jadi Windows tidak akan pernah mencoba menjalankan `sh`.
 
-Build semua platform ke `platform/` sebelum publish:
+Build semua platform ke `dist/` sebelum rilis:
 
 ```bash
-for t in "linux amd64 platform/buffsw-cli-linux-x64/bs" \
-         "linux arm64 platform/buffsw-cli-linux-arm64/bs" \
-         "linux arm platform/buffsw-cli-linux-arm/bs" \
-         "linux 386 platform/buffsw-cli-linux-386/bs" \
-         "darwin amd64 platform/buffsw-cli-darwin-x64/bs" \
-         "darwin arm64 platform/buffsw-cli-darwin-arm64/bs" \
-         "windows amd64 platform/buffsw-cli-win32-x64/bs.exe" \
-         "windows arm64 platform/buffsw-cli-win32-arm64/bs.exe"; do
+for t in "linux amd64 buffsw-cli-linux-x64" \
+         "linux arm64 buffsw-cli-linux-arm64" \
+         "linux arm buffsw-cli-linux-arm" \
+         "linux 386 buffsw-cli-linux-386" \
+         "darwin amd64 buffsw-cli-darwin-x64" \
+         "darwin arm64 buffsw-cli-darwin-arm64" \
+         "windows amd64 buffsw-cli-win32-x64.exe" \
+         "windows arm64 buffsw-cli-win32-arm64.exe"; do
   set -- $t
-  GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath -o "$3" .
+  GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath -o "dist/$3" .
 done
 ```
 
-`CGO_ENABLED=0` menghasilkan binary **statis**, jadi satu build Linux berjalan
-baik di **glibc** maupun **musl**. Binary di-gitignore (`platform/*/bs*`)
-tetapi masuk tarball lewat `files: ["platform"]`.
+`CGO_ENABLED=0` menghasilkan binary **statis**, jadi satu build Linux
+berjalan baik di **glibc** maupun **musl**. Binary di-gitignore (`dist/`).
 
-Kecilkan binary Linux dan Windows-x64 dengan UPX (darwin dan win-arm64
-tidak didukung UPX):
+Opsional: kecilkan dengan UPX sebelum upload (Linux dan Windows-x64 saja;
+darwin dan win-arm64 tidak didukung):
 
 ```bash
-upx --best --lzma platform/buffsw-cli-linux-*/*/bs platform/buffsw-cli-win32-x64/bs.exe
+upx --best --lzma dist/buffsw-cli-linux-* dist/buffsw-cli-win32-x64.exe
 ```
+
+Publish rilis (hanya satu package npm):
+
+1. Pastikan tag release sama dengan versi package — naikkan `"version"`
+   di `package.json`, lalu `git tag v0.1.1` (buat tag sesuai versi yang
+   dirilis).
+2. Upload binary hasil build ke release GitHub:
+   `gh release upload v0.1.1 dist/*`
+   (buat release dulu dengan `gh release create v0.1.1` kalau perlu).
+3. Publish package npm: `npm publish`.
+
+`postinstall.mjs` menyusun URL unduhan dari versi package
+(`https://github.com/ozan-fn/buffswitch/releases/download/v0.1.1/buffsw-cli-linux-x64`),
+jadi tag release dan versi package harus selalu cocok. URL bisa dioverride
+per instalasi lewat env `BUFFSW_CLI_BINARY_URL` (mis. mirror).
 
 Peta file untuk pengembangan:
 
@@ -317,6 +335,8 @@ Peta file untuk pengembangan:
 | Akun tidak muncul di daftar | tekan `r` untuk muat ulang dari disk |
 | Login selesai tapi "Tidak ada akun baru" | kamu login dengan email yang sudah terdaftar — sesi di-refresh, bukan akun baru |
 | Tampilan berantakan di terminal sempit | jendela otomatis menyusut; minimal lebar ~20 kolom |
+| `Error: bs is not installed correctly.` / di Windows `The system cannot find the path specified.` | postinstall tidak pernah berjalan atau unduhan gagal — pasang ulang tanpa `--ignore-scripts` (mis. `npm i -g --force buffsw-cli`), cek asset release sudah di-upload (lihat Rilis binary), atau jalankan `node postinstall.mjs` di dalam folder package yang terpasang |
+| Instal dari clone git/CI gagal | `dist/` di-gitignore dan asset release mungkin belum di-upload — build dulu binary untuk OS-mu ke `dist/` lalu upload ke release (lihat Rilis binary) |
 
 ---
 

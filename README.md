@@ -130,12 +130,14 @@ buffswitch/            repo; npm package name is `buffsw-cli`
 ├── login.go          terminal hand-off: runs `freebuff login`, ingests
 │                     the result, manages the temporary login-state file
 ├── store_test.go     unit tests for the store logic
-├── package.json      npm wrapper: `bin.bs` → `bin/bs.exe`
-├── postinstall.mjs   copies the matching platform binary → `bin/bs.exe`
+├── package.json      npm wrapper: `bin.bs` → `bin/bs.exe` (tarball ships
+│                     no binaries — only the stub + postinstall)
+├── postinstall.mjs   downloads the binary matching the user's OS/arch
+│                     from the GitHub Release → `bin/bs.exe`
 ├── bin/
-│   └── bs.exe        placeholder (`echo`); replaced by postinstall
-└── platform/          prebuilt binaries, one per OS/arch
-    └── buffsw-cli-<os>-<arch>/   binary
+│   └── bs.exe        plain-text placeholder; replaced by postinstall
+└── dist/              built binaries, one per OS/arch (gitignored) —
+                      upload these to the GitHub Release with `gh`
 ```
 
 ### Flow when you press `a`
@@ -263,39 +265,55 @@ gofmt -l .                                 # format check (empty = tidy)
 
 ### Release binaries (multi-OS)
 
-All platform binaries are bundled in this single package (folder
-`platform/`). On install, `postinstall.mjs` picks the one matching the
-user's OS/arch and copies it into `bin/bs.exe` (a static target name —
-Linux/macOS ignore the `.exe` extension; what matters is the `0o755` exec
-bit), then verifies it runs. Only `buffsw-cli` is published — no separate
-platform packages.
+The npm package ships **no binaries** at all. Each platform binary lives
+as a **GitHub Release asset** (repo `ozan-fn/buffswitch`, tag
+`v<version>`). During install, `postinstall.mjs` downloads **only the one
+matching the user's OS/arch** and saves it as `bin/bs.exe` — so users
+download a few MB, never all eight (~48 MB). `bin/bs.exe` in the tarball
+is a plain-text stub (no shebang) that only prints an error if
+postinstall never ran — it is a file, never a shell script, so Windows
+never tries to run `sh`.
 
-Build every platform into `platform/` before publishing:
+Build every platform into `dist/` before a release:
 
 ```bash
-for t in "linux amd64 platform/buffsw-cli-linux-x64/bs" \
-         "linux arm64 platform/buffsw-cli-linux-arm64/bs" \
-         "linux arm platform/buffsw-cli-linux-arm/bs" \
-         "linux 386 platform/buffsw-cli-linux-386/bs" \
-         "darwin amd64 platform/buffsw-cli-darwin-x64/bs" \
-         "darwin arm64 platform/buffsw-cli-darwin-arm64/bs" \
-         "windows amd64 platform/buffsw-cli-win32-x64/bs.exe" \
-         "windows arm64 platform/buffsw-cli-win32-arm64/bs.exe"; do
+for t in "linux amd64 buffsw-cli-linux-x64" \
+         "linux arm64 buffsw-cli-linux-arm64" \
+         "linux arm buffsw-cli-linux-arm" \
+         "linux 386 buffsw-cli-linux-386" \
+         "darwin amd64 buffsw-cli-darwin-x64" \
+         "darwin arm64 buffsw-cli-darwin-arm64" \
+         "windows amd64 buffsw-cli-win32-x64.exe" \
+         "windows arm64 buffsw-cli-win32-arm64.exe"; do
   set -- $t
-  GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath -o "$3" .
+  GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath -o "dist/$3" .
 done
 ```
 
 `CGO_ENABLED=0` produces **static** binaries, so a single Linux build runs
-on both **glibc** and **musl**. The binaries are gitignored
-(`platform/*/bs*`) but included in the tarball via `files: ["platform"]`.
+on both **glibc** and **musl**. Binaries are gitignored (`dist/`).
 
-Shrink the Linux and Windows-x64 binaries with UPX (darwin and win-arm64
-are not supported by UPX):
+Optional: shrink with UPX before uploading (Linux and Windows-x64 only;
+darwin and win-arm64 are not supported):
 
 ```bash
-upx --best --lzma platform/buffsw-cli-linux-*/*/bs platform/buffsw-cli-win32-x64/bs.exe
+upx --best --lzma dist/buffsw-cli-linux-* dist/buffsw-cli-win32-x64.exe
 ```
+
+Publish a release (a single npm package):
+
+1. Make the release tag match the package version — bump `"version"` in
+   `package.json`, then `git tag v0.1.1` (create the tag for the version
+   you are releasing).
+2. Upload the built binaries to the GitHub release:
+   `gh release upload v0.1.1 dist/*`
+   (create the release first with `gh release create v0.1.1` if needed).
+3. Publish the npm package: `npm publish`.
+
+`postinstall.mjs` builds its download URL from the package version
+(`https://github.com/ozan-fn/buffswitch/releases/download/v0.1.1/buffsw-cli-linux-x64`),
+so the release tag and the package version must always match. Override the
+URL per install with the `BUFFSW_CLI_BINARY_URL` env var (e.g. a mirror).
 
 File map for development:
 
@@ -317,6 +335,8 @@ File map for development:
 | An account is missing from the list | press `r` to reload from disk |
 | Login finished but "No new account" | you logged in with an already-registered email — the session was refreshed, not added |
 | Layout breaks in a narrow terminal | the window auto-shrinks; minimum width is ~20 columns |
+| `Error: bs is not installed correctly.` / Windows `The system cannot find the path specified.` | postinstall never ran or the download failed — reinstall without `--ignore-scripts` (e.g. `npm i -g --force buffsw-cli`), check the release tag has the assets (see Release binaries), or run `node postinstall.mjs` inside the installed package |
+| Install from a git clone/CI fails | `dist/` is gitignored and the release may not have the assets yet — build the binary for your OS into `dist/` and upload it to the release (see Release binaries) |
 
 ---
 

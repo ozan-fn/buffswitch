@@ -1,2 +1,11 @@
-#!/bin/sh
-echo "bs placeholder — akan diganti postinstall saat npm install"
+buffsw-cli stub: this file is replaced at install time.
+
+If you are seeing this text instead of the CLI help, the postinstall
+step did not run (for example `npm install --ignore-scripts`,
+`npm link`, or an offline install).
+
+Reinstall normally to fetch the real binary:
+  npm install -g buffsw-cli
+
+The correct binary for your platform is downloaded from the GitHub
+release for this version and placed at this path.
