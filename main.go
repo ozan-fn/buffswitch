@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,14 +36,17 @@ type Model struct {
 	confirmDelete bool   // awaiting y/n confirmation for delete
 	deleteEmail   string // account pending deletion
 
-	needLogin bool // set when the user asked to add an account
+	needLogin  bool // set when the user asked to add an account
+	needLaunch bool // set when the user picked an account and wants freebuff to run
+
+	stats *Stats
 
 	termW int
 	termH int
 }
 
-func newModel(store *Store, credsPath string) *Model {
-	m := &Model{store: store, credsPath: credsPath}
+func newModel(store *Store, credsPath string, stats *Stats) *Model {
+	m := &Model{store: store, credsPath: credsPath, stats: stats}
 	m.refreshList()
 	return m
 }
@@ -132,17 +136,20 @@ func (m *Model) doSwitch() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	acc := m.accounts[m.cursor]
-	if d, ok := m.store.Default(); ok && d.Email == acc.Email {
-		m.status = dimStyle.Render("Akun ini sudah aktif.")
-		return m, nil
+	d, ok := m.store.Default()
+	if ok && d.Email == acc.Email {
+		// already active; still hand off to freebuff
+		m.stats.Begin(acc.Email)
+		m.needLaunch = true
+		return m, tea.Quit
 	}
 	if err := m.store.SwitchTo(acc.Email); err != nil {
 		m.status = errStyle.Render("Gagal switch: " + err.Error())
 		return m, nil
 	}
-	m.refreshList()
-	m.status = okStyle.Render(fmt.Sprintf("Aktif: %s <%s>", acc.Name, acc.Email))
-	return m, nil
+	m.stats.Begin(acc.Email)
+	m.needLaunch = true
+	return m, tea.Quit
 }
 
 // startAdd parks the current default, snapshots the accounts, and quits the
@@ -183,6 +190,21 @@ func (m *Model) refreshList() {
 		prev = m.accounts[m.cursor].Email
 	}
 	m.accounts = m.store.Accounts()
+	// least-used first: usage count asc, then name, then email
+	if m.stats != nil {
+		st := m.stats
+		sort.SliceStable(m.accounts, func(i, j int) bool {
+			ci, cj := st.Get(m.accounts[i].Email).Count, st.Get(m.accounts[j].Email).Count
+			if ci != cj {
+				return ci < cj
+			}
+			ni, nj := strings.ToLower(m.accounts[i].Name), strings.ToLower(m.accounts[j].Name)
+			if ni != nj {
+				return ni < nj
+			}
+			return m.accounts[i].Email < m.accounts[j].Email
+		})
+	}
 	m.cursor = 0
 	for i, a := range m.accounts {
 		if a.Email == prev {
@@ -267,6 +289,9 @@ func (m *Model) viewList() string {
 			if a.Email == activeEmail {
 				row += "  (aktif)"
 			}
+			if u := m.stats.Get(a.Email); u.Count > 0 {
+				row += "  " + u.Summary()
+			}
 			line := truncate(row, cw)
 			if selected {
 				line = "▶" + line[1:]
@@ -289,7 +314,7 @@ func (m *Model) viewList() string {
 		b.WriteString(m.status)
 	}
 	b.WriteString("\n\n")
-	b.WriteString(dimStyle.Render("↑/↓ pilih · Enter aktif · a tambah · d hapus · r reload · q keluar"))
+	b.WriteString(dimStyle.Render("↑/↓ pilih · Enter aktif & jalankan freebuff · a tambah · d hapus · r reload · q keluar"))
 	return m.render(b.String())
 }
 
@@ -299,6 +324,8 @@ func main() {
 	credsPath := flag.String("creds", defaultCredsPath(), "path ke credentials.json")
 	flag.Parse()
 
+	stats := LoadStats(statsPath(*credsPath))
+
 	for {
 		store, err := Load(*credsPath)
 		if err != nil {
@@ -306,7 +333,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		m := newModel(store, *credsPath)
+		m := newModel(store, *credsPath, stats)
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		final, err := p.Run()
 		if err != nil {
@@ -315,7 +342,24 @@ func main() {
 		}
 
 		mm, ok := final.(*Model)
-		if !ok || !mm.needLogin {
+		if !ok {
+			break
+		}
+
+		if mm.needLaunch {
+			// Terminal restored — hand it over to the freebuff CLI itself.
+			if err := runFreebuff(); err != nil {
+				fmt.Fprintln(os.Stderr, "freebuff:", err)
+				os.Exit(1)
+			}
+			// freebuff exited — close the session started at Enter.
+			if d, ok := mm.store.Default(); ok {
+				stats.End(d.Email)
+			}
+			break
+		}
+
+		if !mm.needLogin {
 			break
 		}
 
@@ -325,7 +369,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "State login tidak ditemukan:", perr)
 			continue
 		}
-		fmt.Println("\nMenjalankan freebuff login — selesaikan login di sini…\n")
+		fmt.Print("\nMenjalankan freebuff login — selesaikan login di sini…\n\n")
 		msg, rerr := runLoginInteractive(*credsPath, pre)
 		removePreLogin(*credsPath)
 		if rerr != nil {

@@ -68,6 +68,16 @@ func removePreLogin(credsPath string) {
 	_ = os.Remove(statePath(credsPath))
 }
 
+// runFreebuff hands the terminal over to the freebuff binary itself (no
+// subcommand), so the user lands straight in the CLI with the picked account.
+func runFreebuff() error {
+	cmd := exec.Command(freebuffBin())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // runLoginInteractive hands the terminal over to `freebuff login` (the login
 // URL is printed by the CLI itself), waits for it to finish, then re-reads
 // credentials.json and reports what happened.

@@ -18,9 +18,15 @@ slot.
 Install the package globally from npm, then run `bs`:
 
 ```bash
-npm i -g buffsw-cli
+npm i -g buffswitch
 bs
 ```
+
+> Sebelumnya memakai nama package lama `buffsw-cli`?
+>
+> ```bash
+> npm remove -g buffsw-cli; npm i -g buffswitch
+> ```
 
 > **Dev mode** — run straight from the source tree (Go 1.27+ and an
 > interactive terminal required):
@@ -33,7 +39,7 @@ bs
 Inside the TUI:
 
 ```text
-↑/↓ or j/k select · Enter activate · a add · d delete · r reload · q quit
+↑/↓ or j/k select · Enter activate & run freebuff · a add · d delete · r reload · q quit
 ```
 
 - **Switch account** — select one, press `Enter`.
@@ -67,7 +73,11 @@ Full details below.
   `(active)`, in an 80-column window (auto-shrinks on narrow terminals).
 - **Switch account (`Enter`)** — the selected account is copied into the
   `default` key; the previously active account is parked under its
-  **email** key.
+  **email** key. `bs` then **exits and runs the `freebuff` CLI** with that
+  account; when `freebuff` finishes, `bs` is done.
+- **Usage stats** — each row shows how often and how long the account was
+  used (`12x · 3h · 2h ago`), tracked in a separate
+  `buffswitch-stats.json`; the list is sorted **least-used first**.
 - **Add account (`a`)** — runs the official `freebuff login` binary by
   handing over the terminal, so its output and the login URL are shown
   right there; when it finishes, `bs` returns to the TUI with the new
@@ -122,7 +132,7 @@ Invariant kept after every `Save`:
 ## File layout
 
 ```text
-buffswitch/            repo; npm package name is `buffsw-cli`
+buffswitch/            repo; npm package name is `buffswitch`
 ├── go.mod            module bs (bubbletea + lipgloss)
 ├── main.go           Bubble Tea TUI: account list, keymap, login loop
 ├── store.go          credentials.json logic: load/save/normalize/
@@ -130,6 +140,9 @@ buffswitch/            repo; npm package name is `buffsw-cli`
 ├── login.go          terminal hand-off: runs `freebuff login`, ingests
 │                     the result, manages the temporary login-state file
 ├── store_test.go     unit tests for the store logic
+├── stats.go          usage stats per account (sessions, counts, last used)
+│                     → buffswitch-stats.json next to credentials.json
+├── stats_test.go     unit tests for the stats logic
 ├── package.json      npm wrapper: `bin.bs` → `bin/bs.exe` (tarball ships
 │                     no binaries — only the stub + postinstall)
 ├── postinstall.mjs   downloads the binary matching the user's OS/arch
@@ -157,7 +170,7 @@ buffswitch/            repo; npm package name is `buffsw-cli`
 
 ## Requirements
 
-- **To install & run:** Node.js/npm (for `npm i -g buffsw-cli`)
+- **To install & run:** Node.js/npm (for `npm i -g buffswitch`)
 - **Dev mode / building from source:** Go 1.27+ (module `bs` is written with Go 1.27)
 - The Freebuff binary inside the manicode config directory (override with
   the `FREEBUFF_BIN` env var)
@@ -172,7 +185,7 @@ buffswitch/            repo; npm package name is `buffsw-cli`
 | Key | Action |
 |---|---|
 | `↑` / `↓` or `j` / `k` | select account |
-| `Enter` | activate the selected account (switch `default`) |
+| `Enter` | activate the selected account, exit `bs`, and run `freebuff` |
 | `a` | add account: exit the TUI, run `freebuff login` in the terminal, then return |
 | `r` | reload the list from disk |
 | `d` | delete the selected account (confirm with `y`) |
@@ -321,6 +334,7 @@ File map for development:
 |---|---|
 | `main.go` | UI: Bubble Tea model, keymap, list rendering, login loop |
 | `store.go` | Data rules: `Load`, `Save`, `normalize`, `SwitchTo`, `ParkDefault`, `Delete`, `IngestAfterLogin` |
+| `stats.go` | Usage stats per account: session tracking, counts, last used → `buffswitch-stats.json` |
 | `login.go` | Terminal hand-off: runs `freebuff login`, ingests the result, manages the temporary login-state file |
 
 ---
@@ -335,7 +349,7 @@ File map for development:
 | An account is missing from the list | press `r` to reload from disk |
 | Login finished but "No new account" | you logged in with an already-registered email — the session was refreshed, not added |
 | Layout breaks in a narrow terminal | the window auto-shrinks; minimum width is ~20 columns |
-| `Error: bs is not installed correctly.` / Windows `The system cannot find the path specified.` | postinstall never ran or the download failed — reinstall without `--ignore-scripts` (e.g. `npm i -g --force buffsw-cli`), check the release tag has the assets (see Release binaries), or run `node postinstall.mjs` inside the installed package |
+| `Error: bs is not installed correctly.` / Windows `The system cannot find the path specified.` | postinstall never ran or the download failed — reinstall without `--ignore-scripts` (e.g. `npm i -g --force buffswitch`), check the release tag has the assets (see Release binaries), or run `node postinstall.mjs` inside the installed package |
 | Install from a git clone/CI fails | `dist/` is gitignored and the release may not have the assets yet — build the binary for your OS into `dist/` and upload it to the release (see Release binaries) |
 
 ---

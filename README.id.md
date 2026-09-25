@@ -18,7 +18,7 @@ masing-masing.
 Pasang package secara global dari npm, lalu jalankan `bs`:
 
 ```bash
-npm i -g buffsw-cli
+npm i -g buffswitch
 bs
 ```
 
@@ -33,7 +33,7 @@ bs
 Di dalam TUI:
 
 ```text
-↑/↓ atau j/k pilih · Enter aktifkan · a tambah · d hapus · r reload · q keluar
+↑/↓ atau j/k pilih · Enter aktifkan & jalankan freebuff · a tambah · d hapus · r reload · q keluar
 ```
 
 - **Switch akun** — pilih akun, tekan `Enter`.
@@ -66,7 +66,12 @@ Detail selengkapnya di bawah.
 - **Daftar akun** — semua akun Freebuff yang tersimpan, akun aktif ditandai
   `(aktif)`, dalam jendela 80-kolom (otomatis menyusut di terminal sempit).
 - **Switch akun (`Enter`)** — akun pilihan disalin ke key `default`; akun
-  yang tadinya aktif diparkir ke slot key **email**-nya.
+  yang tadinya aktif diparkir ke slot key **email**-nya. Setelah itu `bs`
+  **keluar dan langsung menjalankan CLI `freebuff`** dengan akun tersebut;
+  saat `freebuff` selesai, `bs` pun selesai.
+- **Statistik pemakaian** — tiap baris menampilkan seberapa sering & lama
+  akun dipakai (`12x · 3j · 2j lalu`), dicatat di file terpisah
+  `buffswitch-stats.json`; daftar diurutkan **paling jarang dipakai dulu**.
 - **Tambah akun (`a`)** — menjalankan binary resmi `freebuff login` dengan
   menyerahkan terminal, jadi output & URL login tampil langsung di sana;
   setelah selesai, `bs` kembali ke TUI dengan akun baru aktif.
@@ -120,7 +125,7 @@ Invariant yang dijaga setelah setiap `Save`:
 ## Struktur file
 
 ```text
-buffswitch/            repo; nama package npm-nya `buffsw-cli`
+buffswitch/            repo; nama package npm-nya `buffswitch`
 ├── go.mod            module bs (bubbletea + lipgloss)
 ├── main.go           TUI Bubble Tea: daftar akun, keymap, loop login
 ├── store.go          logika credentials.json: load/save/normalisasi/
@@ -128,6 +133,9 @@ buffswitch/            repo; nama package npm-nya `buffsw-cli`
 ├── login.go          hand-off terminal: menjalankan `freebuff login`,
 │                     ingest hasil, kelola file state login sementara
 ├── store_test.go     unit test logika store
+├── stats.go          statistik pemakaian per akun (sesi, jumlah, terakhir
+│                     dipakai) → buffswitch-stats.json di samping credentials.json
+├── stats_test.go     unit test logika stats
 ├── package.json      wrapper npm: `bin.bs` → `bin/bs.exe` (tarball tidak
 │                     membawa binary — cuma stub + postinstall)
 ├── postinstall.mjs   unduh binary yang cocok dengan OS/arch pengguna dari
@@ -155,7 +163,7 @@ buffswitch/            repo; nama package npm-nya `buffsw-cli`
 
 ## Persyaratan
 
-- **Untuk instalasi & pakai:** Node.js/npm (untuk `npm i -g buffsw-cli`)
+- **Untuk instalasi & pakai:** Node.js/npm (untuk `npm i -g buffswitch`)
 - **Mode dev / bangun dari source:** Go 1.27+ (module `bs` ditulis dengan Go 1.27)
 - Binary Freebuff di direktori config manicode (bisa dioverride lewat env
   `FREEBUFF_BIN`)
@@ -170,7 +178,7 @@ buffswitch/            repo; nama package npm-nya `buffsw-cli`
 | Tombol | Aksi |
 |---|---|
 | `↑` / `↓` atau `j` / `k` | pilih akun |
-| `Enter` | aktifkan akun yang dipilih (switch `default`) |
+| `Enter` | aktifkan akun yang dipilih, keluar dari `bs`, lalu jalankan `freebuff` |
 | `a` | tambah akun: keluar dari TUI, jalankan `freebuff login` di terminal, lalu kembali |
 | `r` | muat ulang daftar dari disk |
 | `d` | hapus akun yang dipilih (konfirmasi dengan `y`) |
@@ -321,6 +329,7 @@ Peta file untuk pengembangan:
 |---|---|
 | `main.go` | UI: model Bubble Tea, keymap, render daftar, loop login |
 | `store.go` | Aturan data: `Load`, `Save`, `normalize`, `SwitchTo`, `ParkDefault`, `Delete`, `IngestAfterLogin` |
+| `stats.go` | Statistik pemakaian per akun: pelacakan sesi, jumlah, terakhir dipakai → `buffswitch-stats.json` |
 | `login.go` | Hand-off terminal: menjalankan `freebuff login`, ingest hasil, kelola file state login sementara |
 
 ---
@@ -335,7 +344,7 @@ Peta file untuk pengembangan:
 | Akun tidak muncul di daftar | tekan `r` untuk muat ulang dari disk |
 | Login selesai tapi "Tidak ada akun baru" | kamu login dengan email yang sudah terdaftar — sesi di-refresh, bukan akun baru |
 | Tampilan berantakan di terminal sempit | jendela otomatis menyusut; minimal lebar ~20 kolom |
-| `Error: bs is not installed correctly.` / di Windows `The system cannot find the path specified.` | postinstall tidak pernah berjalan atau unduhan gagal — pasang ulang tanpa `--ignore-scripts` (mis. `npm i -g --force buffsw-cli`), cek asset release sudah di-upload (lihat Rilis binary), atau jalankan `node postinstall.mjs` di dalam folder package yang terpasang |
+| `Error: bs is not installed correctly.` / di Windows `The system cannot find the path specified.` | postinstall tidak pernah berjalan atau unduhan gagal — pasang ulang tanpa `--ignore-scripts` (mis. `npm i -g --force buffswitch`), cek asset release sudah di-upload (lihat Rilis binary), atau jalankan `node postinstall.mjs` di dalam folder package yang terpasang |
 | Instal dari clone git/CI gagal | `dist/` di-gitignore dan asset release mungkin belum di-upload — build dulu binary untuk OS-mu ke `dist/` lalu upload ke release (lihat Rilis binary) |
 
 ---
