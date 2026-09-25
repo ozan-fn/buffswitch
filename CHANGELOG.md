@@ -3,7 +3,7 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/); versi
 [SemVer](https://semver.org/).
 
-## [0.1.4-beta.1] — 2026-09-25
+## [0.1.4] — 2026-09-25
 
 ### Added
 - **Langsung jalankan `freebuff`**: `Enter` mengaktifkan akun, lalu `bs`

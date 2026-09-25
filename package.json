@@ -1,6 +1,6 @@
 {
   "name": "buffswitch",
-  "version": "0.1.4-beta.1",
+  "version": "0.1.4",
   "description": "A terminal account selector for Freebuff, written in Go with Bubble Tea",
   "license": "MIT",
   "bin": {
